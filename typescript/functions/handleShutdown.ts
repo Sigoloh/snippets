@@ -1,5 +1,5 @@
 // Shutdown handler to gracefully exit any programs
-// Base on  @nfantone nfantone/before-shutdown.js gist in:
+// Based on @nfantone's nfantone/before-shutdown.js gist in:
 // https://gist.github.com/nfantone/1eaa803772025df69d07f4dbf5df7e58
 
 interface GenLogger {
@@ -10,10 +10,19 @@ interface GenLogger {
 }
 
 export class BeforeShutdown {
-  static SHUTDOWN_SIGNALS: Set<string> = new Set(["SIGINT", "SIGTERM", "exit"])
+  static SHUTDOWN_SIGNALS: Set<string> = new Set(["SIGINT", "SIGTERM"])
   static SHUTDOWN_TIMEOUT: number = 15000;
 
-  static useLogger?: GenLogger;
+  private static logger?: GenLogger; 
+
+  static useLogger(lg: GenLogger) {
+    BeforeShutdown.logger = {
+      error: lg.error.bind(lg),
+      warning: lg.warning ? lg.warning.bind(lg) : undefined,
+      warn:  lg.warn ? lg.warn.bind(lg) : undefined,
+      info: lg.info.bind(lg),
+    };
+  }
 
   static listeners: ((...params: any[]) => void | Promise<void>)[] = [];
 
@@ -22,11 +31,11 @@ export class BeforeShutdown {
   }
 
   private static log(lvl: 'error' | 'info' | 'warn', ...message: any): void {
-    if(!BeforeShutdown.useLogger){
+    if(!BeforeShutdown.logger){
       return
     }
 
-    const rLvl = lvl === 'warn' ? BeforeShutdown.useLogger.warn ?? BeforeShutdown.useLogger.warning ?? BeforeShutdown.useLogger.error : BeforeShutdown.useLogger[lvl]
+    const rLvl = lvl === 'warn' ? BeforeShutdown.logger.warn ?? BeforeShutdown.logger.warning ?? BeforeShutdown.logger.error : BeforeShutdown.logger[lvl]
 
     rLvl(...message);
     return
@@ -47,14 +56,14 @@ export class BeforeShutdown {
       try {
         await listener(signalOrEvent);
       } catch (err) {
-        BeforeShutdown.log('warn', `A shutdown handler failed before completing with: ${err.message || err}`)
+        BeforeShutdown.log('warn', `A shutdown handler failed before completing with: ${(err as Error).message || err}`)
       }
     }
 
     return process.exit(0);
   }
 
-  static beforeShutdown(listener: (...params: any[]) => void | Promise<void>): (...params: any[]) => void | Promise<void> {
+  static addHandler(listener: (...params: any[]) => void | Promise<void>): (...params: any[]) => void | Promise<void> {
     BeforeShutdown.listeners.push(listener);
     return listener;
   }
